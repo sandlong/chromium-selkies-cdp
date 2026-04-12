@@ -33,22 +33,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
  && mkdir -p /usr/share/keyrings \
  && curl -fsSLo /usr/share/keyrings/brave-browser-archive-keyring.gpg https://brave-browser-apt-release.s3.brave.com/brave-browser-archive-keyring.gpg \
- && curl -fsSLo /etc/apt/sources.list.d/brave-browser-release.sources https://brave-browser-apt-release.s3.brave.com/brave-browser.sources \
- && apt-get update \
- && apt-get install -y --no-install-recommends brave-browser \
- && apt-get clean \
- && rm -rf /var/lib/apt/lists/*
+ && curl -fsSLo /etc/apt/sources.list.d/brave-browser-release.list https://brave-browser-apt-release.s3.brave.com/brave-browser-release.list \
+ && apt-get update && apt-get install -y --no-install-recommends \
+    brave-browser \
+ && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-RUN mkdir -p /data/profile /var/log/brave-vnc-cdp
-
-COPY scripts/start-brave-vnc-cdp.sh /usr/local/bin/start-brave-vnc-cdp.sh
-COPY scripts/cdp-housekeeping.py /usr/local/bin/cdp-housekeeping.py
-RUN chmod +x /usr/local/bin/start-brave-vnc-cdp.sh /usr/local/bin/cdp-housekeeping.py
-
-EXPOSE 8080 5900 9222
-VOLUME ["/data"]
-
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=5 \
-  CMD curl -fsS http://127.0.0.1:${CDP_PORT:-9222}/json/version >/dev/null || exit 1
+COPY scripts/start-brave-vnc-cdp.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/start-brave-vnc-cdp.sh
 
 ENTRYPOINT ["/usr/local/bin/start-brave-vnc-cdp.sh"]

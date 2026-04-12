@@ -14,8 +14,6 @@ services:
       VNC_SHARED: "false"
       START_URL: https://example.com
       BRAVE_NO_SANDBOX: "true"
-      TAB_CLEANUP_INTERVAL_SEC: 21600
-      TAB_CLEANUP_KEEP_BLANK: "true"
       DAILY_RESTART_AT: "04:00"
       # BRAVE_ARGS: "--disable-gpu"
     volumes:

@@ -5,16 +5,6 @@
 
 A Docker image for **Brave Browser + noVNC + raw VNC + Chrome DevTools Protocol (CDP)**, intended for local browser automation on **Linux arm64/aarch64** as well as amd64.
 
-This project exists for one practical reason: cloud browser providers are useful, but sometimes you want a **real local browser** that:
-
-- exposes a CDP endpoint on `9222`
-- can be watched live through **noVNC**
-- works well with agent frameworks such as **OpenClaw** and **Hermes Agent**
-- can run on **ARM64 servers**
-- uses **Brave** instead of plain Chromium
-
-It also supports optional **automatic tab housekeeping** and **scheduled daily restart**, which is useful for long-lived agent-driven browser sessions.
-
 ## What it provides
 
 - Official **Brave Browser** installed from Brave's Linux APT repository
@@ -24,10 +14,6 @@ It also supports optional **automatic tab housekeeping** and **scheduled daily r
 - **noVNC** web client on port `8080`
 - **CDP** endpoint on port `9222`
 - Persistent browser profile storage in `/data/profile`
-
-## Why Brave instead of Chromium
-
-Brave is Chromium-based, so it works with CDP clients just like Chrome or Chromium, but it also brings Brave-specific features such as Shields. That can be convenient for interactive browsing, though it may change page behavior for some automation flows. If a site breaks, tune Brave settings for that site or pass extra launch flags through `BRAVE_ARGS`.
 
 ## Quick start
 
@@ -64,18 +50,6 @@ docker build -t brave-vnc-cdp .
 docker compose up -d --build
 ```
 
-Then open:
-
-- noVNC: `http://127.0.0.1:8080/vnc.html`
-- raw VNC: `127.0.0.1:5900`
-- CDP JSON: `http://127.0.0.1:9222/json/version`
-
-For noVNC, enter the same value as `VNC_PASS` when prompted. You can also prefill it with a URL like:
-
-```text
-http://127.0.0.1:8080/vnc.html?password=your-password
-```
-
 ## Environment variables
 
 | Variable | Default | Meaning |
@@ -94,121 +68,20 @@ http://127.0.0.1:8080/vnc.html?password=your-password
 | `USER_DATA_DIR` | `/data/profile` | Persistent Brave profile path |
 | `BRAVE_NO_SANDBOX` | `true` | Add `--no-sandbox` inside container |
 | `BRAVE_ARGS` | empty | Extra Brave flags as a single string |
-| `TAB_CLEANUP_INTERVAL_SEC` | `0` | Close all page tabs on an interval; `0` disables |
-| `TAB_CLEANUP_KEEP_BLANK` | `true` | Leave one `about:blank` tab after cleanup |
 | `DAILY_RESTART_AT` | empty | Restart the browser/container daily at `HH:MM` |
 
-## CDP usage
+## Maintenance
 
-After the container starts, inspect the browser endpoint:
+### Daily Restart
 
-```bash
-curl http://127.0.0.1:9222/json/version
-```
-
-You should see a `webSocketDebuggerUrl` that CDP clients can connect to.
-
-Internally, Brave binds CDP to loopback. The container forwards that internal port back out to `0.0.0.0:${CDP_PORT}` so host tools can still attach normally.
-
-## OpenClaw example
-
-See `examples/openclaw.browser.json5`.
-
-Typical config:
-
-```json5
-{
-  browser: {
-    enabled: true,
-    defaultProfile: "brave-local",
-    profiles: {
-      brave-local: {
-        cdpUrl: "http://127.0.0.1:9222",
-        color: "#FB542B"
-      }
-    }
-  }
-}
-```
-
-## Hermes Agent example
-
-See `examples/hermes-browser.md`.
-
-Typical flow:
-
-```text
-/browser connect ws://127.0.0.1:9222/devtools/browser/<id>
-```
-
-Depending on Hermes version, `ws://127.0.0.1:9222` may also work if it performs endpoint discovery for you.
-
-## Important operational note
-
-If **OpenClaw** and **Hermes** attach to the same browser instance at the same time, they can interfere with each other by fighting over tabs, focus, and page state. For shared use, prefer one active controller at a time, or run separate container instances.
-
-## Automatic housekeeping
-
-Two optional maintenance features are built in.
-
-### 1. Periodic tab cleanup
-
-If `TAB_CLEANUP_INTERVAL_SEC` is greater than `0`, the container periodically queries the local CDP endpoint and closes all page tabs. If `TAB_CLEANUP_KEEP_BLANK=true`, it keeps or recreates a single `about:blank` tab.
-
-Example:
-
-```bash
--e TAB_CLEANUP_INTERVAL_SEC=21600 \
--e TAB_CLEANUP_KEEP_BLANK=true
-```
-
-That configuration cleans tabs every 6 hours and leaves one blank tab behind.
-
-### 2. Daily restart
-
-If `DAILY_RESTART_AT` is set, the container will terminate the Brave process at that local time every day. With Docker restart policies such as `--restart unless-stopped`, the container comes back automatically with a fresh browser process but the same persisted profile.
-
-Example:
-
-```bash
---restart unless-stopped \
--e DAILY_RESTART_AT=04:00
-```
-
-This is a simple, robust way to clear long-lived browser state while preserving cookies and login sessions stored under `/data/profile`.
+If `DAILY_RESTART_AT` is set (e.g., `04:00`), the container process will exit at that time. When combined with Docker's `restart: always` policy, this provides a clean, daily-refreshed browser instance without losing persistent data in `/data`.
 
 ## Publishing
 
-This repository includes a GitHub Actions workflow at `.github/workflows/docker-publish.yml` that builds and publishes a multi-architecture image to GHCR for:
+This repository includes a GitHub Actions workflow that builds and publishes a multi-architecture image to GHCR for `linux/amd64` and `linux/arm64`.
 
-- `linux/amd64`
-- `linux/arm64`
-
-On pushes to `main`, it publishes `latest`, `main`, and `sha-*` tags. On version tags such as `v1.0.0`, it also publishes the matching release tag.
-
-The workflow also runs on a daily schedule. On scheduled runs, it checks the latest Brave version available from Brave's official APT repository. If that version has already been published to GHCR under a tag like `brave-1.89.132`, the build is skipped. If not, a fresh multi-arch image is built and pushed.
-
-## Security notes
-
-- Change `VNC_PASS` before exposing this beyond localhost.
-- Prefer binding ports to localhost or a private tailnet.
-- CDP is powerful. Anyone who reaches it can effectively control the browser.
-- If you publish this behind a reverse proxy, add authentication in front of noVNC.
+The workflow also runs on a daily schedule to catch upstream Brave updates. It checks the latest version available and only builds if a new version is detected.
 
 ## Logs
 
-Runtime logs are written inside the container under:
-
-- `/var/log/brave-vnc-cdp/xvfb.log`
-- `/var/log/brave-vnc-cdp/openbox.log`
-- `/var/log/brave-vnc-cdp/x11vnc.log`
-- `/var/log/brave-vnc-cdp/novnc.log`
-- `/var/log/brave-vnc-cdp/brave.log`
-
-## Roadmap ideas
-
-- Non-root runtime user
-- Optional `supervisord`/s6 management
-- Built-in health/status page
-- Multi-arch GHCR publish workflow
-- Optional auth in front of noVNC
+Runtime logs are written inside the container under `/var/log/brave-vnc-cdp/`.
