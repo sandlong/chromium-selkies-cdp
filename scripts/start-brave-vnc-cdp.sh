@@ -21,6 +21,13 @@ LOG_DIR="/var/log/brave-vnc-cdp"
 mkdir -p "$USER_DATA_DIR" "$LOG_DIR"
 export DISPLAY TZ
 
+if [[ -n "$DAILY_RESTART_AT" ]]; then
+  if ! date -d "$(date +%F) $DAILY_RESTART_AT" +%s >/dev/null 2>&1; then
+    echo "Invalid DAILY_RESTART_AT: $DAILY_RESTART_AT" >&2
+    exit 1
+  fi
+fi
+
 cleanup() {
   local code=$?
   trap - EXIT INT TERM

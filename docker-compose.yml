@@ -18,7 +18,7 @@ services:
       # BRAVE_ARGS: "--disable-gpu"
     volumes:
       - brave-data:/data
-    restart: always # Important for DAILY_RESTART_AT to work correctly
+    restart: unless-stopped # Also works with DAILY_RESTART_AT, but respects manual stop
 
 volumes:
   brave-data:

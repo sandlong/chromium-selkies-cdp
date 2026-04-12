@@ -38,7 +38,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     brave-browser \
  && apt-get clean && rm -rf /var/lib/apt/lists/*
 
+RUN mkdir -p /data/profile /var/log/brave-vnc-cdp
+
 COPY scripts/start-brave-vnc-cdp.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/start-brave-vnc-cdp.sh
+
+EXPOSE 8080 5900 9222
+VOLUME ["/data"]
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=5 \
+  CMD curl -fsS http://127.0.0.1:${CDP_PORT:-9222}/json/version >/dev/null || exit 1
 
 ENTRYPOINT ["/usr/local/bin/start-brave-vnc-cdp.sh"]
