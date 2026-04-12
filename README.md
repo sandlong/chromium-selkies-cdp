@@ -1,5 +1,8 @@
 # brave-vnc-cdp
 
+[![Docker publish](https://github.com/sandlong/brave-vnc-cdp/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/sandlong/brave-vnc-cdp/actions/workflows/docker-publish.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+
 A Docker image for **Brave Browser + noVNC + raw VNC + Chrome DevTools Protocol (CDP)**, intended for local browser automation on **Linux arm64/aarch64** as well as amd64.
 
 This project exists for one practical reason: cloud browser providers are useful, but sometimes you want a **real local browser** that:
@@ -26,11 +29,15 @@ Brave is Chromium-based, so it works with CDP clients just like Chrome or Chromi
 
 ## Quick start
 
+### Pull from GHCR
+
+```bash
+docker pull ghcr.io/sandlong/brave-vnc-cdp:latest
+```
+
 ### Docker run
 
 ```bash
-docker build -t brave-vnc-cdp .
-
 docker run -d \
   --name brave-vnc-cdp \
   -p 8080:8080 \
@@ -40,7 +47,13 @@ docker run -d \
   -e VNC_PASS='change-me-now' \
   -e START_URL='https://example.com' \
   -v brave-data:/data \
-  brave-vnc-cdp
+  ghcr.io/sandlong/brave-vnc-cdp:latest
+```
+
+### Build locally
+
+```bash
+docker build -t brave-vnc-cdp .
 ```
 
 ### Docker Compose
@@ -122,6 +135,15 @@ Depending on Hermes version, `ws://127.0.0.1:9222` may also work if it performs 
 ## Important operational note
 
 If **OpenClaw** and **Hermes** attach to the same browser instance at the same time, they can interfere with each other by fighting over tabs, focus, and page state. For shared use, prefer one active controller at a time, or run separate container instances.
+
+## Publishing
+
+This repository includes a GitHub Actions workflow at `.github/workflows/docker-publish.yml` that builds and publishes a multi-architecture image to GHCR for:
+
+- `linux/amd64`
+- `linux/arm64`
+
+On pushes to `main`, it publishes `latest`, `main`, and `sha-*` tags. On version tags such as `v1.0.0`, it also publishes the matching release tag.
 
 ## Security notes
 
