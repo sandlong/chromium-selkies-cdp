@@ -15,6 +15,9 @@ START_URL="${START_URL:-about:blank}"
 USER_DATA_DIR="${USER_DATA_DIR:-/data/profile}"
 TZ="${TZ:-UTC}"
 SHARED="${VNC_SHARED:-false}"
+TAB_CLEANUP_INTERVAL_SEC="${TAB_CLEANUP_INTERVAL_SEC:-0}"
+TAB_CLEANUP_KEEP_BLANK="${TAB_CLEANUP_KEEP_BLANK:-true}"
+DAILY_RESTART_AT="${DAILY_RESTART_AT:-}"
 BRAVE_ARGS_RAW="${BRAVE_ARGS:-}"
 LOG_DIR="/var/log/brave-vnc-cdp"
 mkdir -p "$USER_DATA_DIR" "$LOG_DIR"
@@ -23,7 +26,7 @@ export DISPLAY TZ
 cleanup() {
   local code=$?
   trap - EXIT INT TERM
-  for pid in "${BRAVE_PID:-}" "${SOCAT_PID:-}" "${NOVNC_PID:-}" "${X11VNC_PID:-}" "${OPENBOX_PID:-}" "${XVFB_PID:-}"; do
+  for pid in "${BRAVE_PID:-}" "${RESTART_LOOP_PID:-}" "${TAB_CLEANUP_LOOP_PID:-}" "${SOCAT_PID:-}" "${NOVNC_PID:-}" "${X11VNC_PID:-}" "${OPENBOX_PID:-}" "${XVFB_PID:-}"; do
     if [[ -n "${pid}" ]] && kill -0 "$pid" 2>/dev/null; then
       kill "$pid" 2>/dev/null || true
     fi
@@ -93,8 +96,48 @@ printf '  VNC:   127.0.0.1:%s\n' "$VNC_PORT"
 printf '  CDP:   http://127.0.0.1:%s/json/version\n' "$CDP_PORT"
 printf '  Title: %s\n' "$VNC_TITLE"
 printf '  TZ:    %s\n' "$TZ"
+if [[ "$TAB_CLEANUP_INTERVAL_SEC" != "0" ]]; then
+  printf '  Tab cleanup interval: %ss (keep blank: %s)\n' "$TAB_CLEANUP_INTERVAL_SEC" "$TAB_CLEANUP_KEEP_BLANK"
+fi
+if [[ -n "$DAILY_RESTART_AT" ]]; then
+  printf '  Daily restart at: %s\n' "$DAILY_RESTART_AT"
+fi
 
 "${BRAVE_CMD[@]}" >"$LOG_DIR/brave.log" 2>&1 &
 BRAVE_PID=$!
+
+if [[ "$TAB_CLEANUP_INTERVAL_SEC" != "0" ]]; then
+  (
+    while true; do
+      sleep "$TAB_CLEANUP_INTERVAL_SEC"
+      python3 /usr/local/bin/cdp-housekeeping.py cleanup "$BRAVE_INTERNAL_CDP_PORT" "$TAB_CLEANUP_KEEP_BLANK" >>"$LOG_DIR/housekeeping.log" 2>&1 || true
+    done
+  ) &
+  TAB_CLEANUP_LOOP_PID=$!
+fi
+
+    (
+        while true; do
+            now_ts=$(date +%s)
+            today=$(date +%F)
+            # Use a more robust date parsing for HH:MM
+            target_ts=$(date -d "$today $DAILY_RESTART_AT" +%s 2>/dev/null || true)
+            if [[ -z "$target_ts" ]]; then
+                echo "[$(date -Is)] Invalid DAILY_RESTART_AT: $DAILY_RESTART_AT" >> "$LOG_DIR/restart.log"
+                exit 1
+            fi
+            if (( target_ts <= now_ts )); then
+                target_ts=$(date -d "$today $DAILY_RESTART_AT +1 day" +%s)
+            fi
+            sleep_for=$(( target_ts - now_ts ))
+            echo "[$(date -Is)] Next daily restart scheduled in ${sleep_for}s at $DAILY_RESTART_AT" >> "$LOG_DIR/restart.log"
+            sleep "$sleep_for"
+            echo "[$(date -Is)] Triggering scheduled daily restart. Sending TERM to Brave (PID $BRAVE_PID)." >> "$LOG_DIR/restart.log"
+            # Killing Brave will cause the main script to exit due to 'wait $BRAVE_PID', 
+            # and Docker will restart the container if policy is 'always' or 'unless-stopped'.
+            kill "$BRAVE_PID" 2>/dev/null || true
+            break
+        done
+    ) &
 
 wait "$BRAVE_PID"

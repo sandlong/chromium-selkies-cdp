@@ -6,6 +6,8 @@ on:
       - main
     tags:
       - 'v*'
+  schedule:
+    - cron: '17 2 * * *'
   workflow_dispatch:
 
 permissions:
@@ -32,9 +34,41 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Resolve latest Brave version
+        id: brave
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(curl -fsSL 'https://brave-browser-apt-release.s3.brave.com/dists/stable/main/binary-arm64/Packages' | awk 'BEGIN { RS="" } /Package: brave-browser/ { for (i = 1; i <= NF; i++) if ($i == "Version:") { print $(i + 1); exit } }')"
+          if [[ -z "$version" ]]; then
+            echo 'Failed to resolve latest Brave version' >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=brave-$version" >> "$GITHUB_OUTPUT"
+
+      - name: Decide whether build is needed
+        id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" != "schedule" ]]; then
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if docker manifest inspect ghcr.io/${{ github.repository }}:${{ steps.brave.outputs.tag }} >/dev/null 2>&1; then
+            echo "Image tag ghcr.io/${{ github.repository }}:${{ steps.brave.outputs.tag }} already exists, skipping scheduled rebuild."
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          DOCKER_CLI_EXPERIMENTAL: enabled
+
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
+        if: steps.gate.outputs.should_build == 'true'
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
@@ -42,14 +76,17 @@ jobs:
             type=ref,event=branch
             type=ref,event=tag
             type=sha
+            type=raw,value=${{ steps.brave.outputs.tag }}
           labels: |
             org.opencontainers.image.title=brave-vnc-cdp
             org.opencontainers.image.description=Brave Browser + noVNC + VNC + CDP Docker image for arm64 and amd64
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.version=${{ steps.brave.outputs.version }}
 
       - name: Build and push
         uses: docker/build-push-action@v6
+        if: steps.gate.outputs.should_build == 'true'
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -58,3 +95,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Skip note
+        if: steps.gate.outputs.should_build != 'true'
+        run: echo "No new Brave version detected, scheduled publish skipped."

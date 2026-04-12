@@ -42,7 +42,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN mkdir -p /data/profile /var/log/brave-vnc-cdp
 
 COPY scripts/start-brave-vnc-cdp.sh /usr/local/bin/start-brave-vnc-cdp.sh
-RUN chmod +x /usr/local/bin/start-brave-vnc-cdp.sh
+COPY scripts/cdp-housekeeping.py /usr/local/bin/cdp-housekeeping.py
+RUN chmod +x /usr/local/bin/start-brave-vnc-cdp.sh /usr/local/bin/cdp-housekeeping.py
 
 EXPOSE 8080 5900 9222
 VOLUME ["/data"]
