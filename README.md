@@ -68,6 +68,12 @@ Then open:
 - raw VNC: `127.0.0.1:5900`
 - CDP JSON: `http://127.0.0.1:9222/json/version`
 
+For noVNC, enter the same value as `VNC_PASS` when prompted. You can also prefill it with a URL like:
+
+```text
+http://127.0.0.1:8080/vnc.html?password=your-password
+```
+
 ## Environment variables
 
 | Variable | Default | Meaning |

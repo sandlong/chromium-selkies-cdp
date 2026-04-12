@@ -46,7 +46,7 @@ X11VNC_ARGS=(
   -display "$DISPLAY"
   -rfbport "$VNC_PORT"
   -forever
-  -passwdfile /tmp/x11vnc.pass
+  -rfbauth /tmp/x11vnc.pass
   -noxrecord
   -noxfixes
   -noxdamage
