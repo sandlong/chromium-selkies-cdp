@@ -39,7 +39,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          version="$(curl -fsSL 'https://brave-browser-apt-release.s3.brave.com/dists/stable/main/binary-arm64/Packages' | awk 'BEGIN { RS="" } /Package: brave-browser/ { for (i = 1; i <= NF; i++) if ($i == "Version:") { print $(i + 1); exit } }')"
+          # Download to file first to avoid curl (23) pipe errors when awk exits early
+          curl -fsSL 'https://brave-browser-apt-release.s3.brave.com/dists/stable/main/binary-arm64/Packages' -o Packages
+          version="$(awk 'BEGIN { RS="" } /Package: brave-browser/ { for (i = 1; i <= NF; i++) if ($i == "Version:") { print $(i + 1); exit } }' Packages)"
           if [[ -z "$version" ]]; then
             echo 'Failed to resolve latest Brave version' >&2
             exit 1
